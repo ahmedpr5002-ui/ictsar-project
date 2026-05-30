@@ -1,0 +1,32 @@
+/* الألوان المستخرجة من الشعار */
+:root {
+  --nav-bg: #ffffff;                    /* خلفية بيضاء صريحة لإبراز ألوان الشعار */
+  --text-muted: #75757a;                 /* رمادي هادئ للعناصر غير النشطة */
+  
+  /* التدرج اللوني المأخوذ مباشرة من سماعة الطبيب في الشعار */
+  --gradient-logo: linear-gradient(135deg, #00ffaa 0%, #00e5ff 50%, #0088ff 100%);
+  
+  /* اللون الأساسي للتفاعل (السيان المضيء) */
+  --color-active: #00d4ff; 
+  --shadow-color: rgba(0, 229, 255, 0.15);
+}
+*{
+
+      font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+
+}
+.userImage{
+  border-radius: 50%;
+  height: 50px;
+  border: 2px solid var(--color-active);
+}
+body{
+ 
+  height: 40dvh;
+ 
+}
+.copcomplete{
+  background-color:#e0e0ea !important;
+  color: black;
+  pointer-events: none;
+}

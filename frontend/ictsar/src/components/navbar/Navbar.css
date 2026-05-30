@@ -1,0 +1,96 @@
+
+/* الحاوية الخارجية المثبتة في الأسفل */
+.navbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--nav-bg);
+  box-shadow: 0 -4px 20px var(--shadow-color); /* ظل ناعم بلون السيان */
+  border-radius: 24px 24px 0 0;
+  padding: 25px 0;
+  z-index: 10;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* حاوية العناصر الداخلية */
+.navBar-Container {
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* القائمة والتوزيع */
+.navBar-Container ul {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* العنصر المفرد */
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.3s ease;
+  gap: 5px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* حجم الأيقونات الافتراضي */
+.nav-icon {
+  font-size: 1.7rem;
+  color: var(--text-muted);
+  transition: all 0.3s ease;
+}
+
+/* النصوص أسفل الأيقونات */
+.nav-item span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
+
+/* --- تأثيرات العنصر النشط (Active) بألوان الشعار --- */
+.nav-item.active .nav-icon {
+  /* تطبيق التدرج اللوني للشعار داخل الأيقونة نفسها */
+  background: var(--gradient-logo);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+
+  transform: translateY(-3px);
+  filter: drop-shadow(0 2px 8px rgba(0, 229, 255, 0.4)); /* توهج خفيف للأيقونة */
+}
+
+.nav-item.active span {
+  color: #00b0ff; /* درجة الأزرق المضيء من الشعار للنص */
+}
+
+/* تنسيق الصورة الشخصية (My) */
+.user-profile {
+  gap: 4px;
+}
+
+.user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--text-muted);
+  transition: all 0.3s ease;
+}
+
+/* تطبيق ألوان الشعار كإطار ملوّن حول الصورة الشخصية عند النشاط */
+.nav-item.active .user-avatar {
+  border-color: transparent;
+  background-image: var(--gradient-logo);
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+}

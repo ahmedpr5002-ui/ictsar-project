@@ -1,0 +1,174 @@
+/* تعريف الألوان المأخوذة من الشعار */
+:root {
+  --nav-bg: #ffffff;
+  --text-muted: #75757a;
+  --gradient-logo: linear-gradient(135deg, #00ffaa 0%, #00e5ff 50%, #0088ff 100%);
+  --color-active: #00d4ff; 
+  --shadow-color: rgba(0, 229, 255, 0.15);
+}
+
+.mobile-doctors-container {
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  direction: rtl;
+  background-color: transparent;
+}
+
+.section-header-mobile {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.section-main-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0;
+}
+
+/* استخدام اللون السيان المضيء للكلمة النشطة */
+.section-main-title span {
+  color: var(--color-active); 
+}
+
+.section-view-all {
+  font-size: 12.5px;
+  color: var(--color-active);
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  user-select: none;
+}
+
+.section-view-all:hover {
+  opacity: 0.8;
+}
+
+.horizontal-scroll-wrapper {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 10px 4px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.horizontal-scroll-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.doctor-mobile-card {
+  position: relative;
+  flex-shrink: 0;
+  width: 130px;
+  background: var(--nav-bg);
+  border-radius: 20px;
+  padding: 16px 12px;
+  text-align: center;
+  border: 2px solid transparent;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* تطبيق تأثير التفاعل عند الاختيار النشط بالسيان والظلال المضيئة */
+.card-active {
+  border-color: var(--color-active);
+  background: #fafeff;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px var(--shadow-color);
+}
+
+.doctor-avatar-wrapper {
+  width: 75px;
+  height: 75px;
+  margin: 0 auto 10px auto;
+  border-radius: 50%;
+  padding: 2px;
+  background: #f1f5f9;
+  transition: background 0.2s ease;
+}
+
+/* استخدام التدرج اللوني الكامل للسماعة خلف صورة الطبيب المختار */
+.card-active .doctor-avatar-wrapper {
+  background: var(--gradient-logo);
+}
+
+.doctor-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #ffffff;
+}
+
+.doctor-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.doctor-name-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #2d3748;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-active .doctor-name-text {
+  color: var(--color-active);
+  font-weight: 700;
+}
+
+.doctor-specialty-text {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* شارة علامة الصح متوافقة مع تدرج الشعار */
+.selected-badge-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--gradient-logo);
+  color: white;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  box-shadow: 0 2px 6px var(--shadow-color);
+}
+
+.selected-doctor-footer-status {
+  margin-top: 14px;
+  background: var(--nav-bg);
+  border-radius: 14px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.01);
+}
+
+.status-label-hint {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.status-value-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a202c;
+}
