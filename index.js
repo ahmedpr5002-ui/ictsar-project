@@ -19,15 +19,13 @@ app.use('/uploads', express.static('uploads'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// المسارات (Routes)
+
 app.use("/user", userRouter);
 app.use("/Appointment", doctorAppointment);
 app.use("/doctor", doctorRouter);
 
-// تصدير التطبيق لـ Vercel
 module.exports = app;
 
-// تشغيل السيرفر محلياً فقط
 if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`Server is running on port ${PORT}`);
