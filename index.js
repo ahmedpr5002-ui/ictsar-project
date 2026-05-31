@@ -3,12 +3,13 @@ const express = require("express");
 const userRouter = require("./routes/user");
 const doctorRouter = require("./routes/doctor");
 const doctorAppointment = require("./routes/Appointment");
-const data = require("./databases/mangodb"); // تأكد أن هذا الملف لا يحتوي على app.listen داخله
+const connectDB = require("./databases/mangodb");
 const app = express();
 var cors = require('cors');
 const path = require('path');
 
 const PORT = process.env.PORT || 3000;
+connectDB();
 
 // إعدادات Middleware
 app.use('/uploadsUser', express.static(path.join(__dirname, 'uploadsUser')));
