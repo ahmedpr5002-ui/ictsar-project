@@ -9,9 +9,9 @@ const path = require('path');
 const userRouter = require("./routes/user");
 const doctorRouter = require("./routes/doctor");
 const doctorAppointment = require("./routes/Appointment");
-const connectDB = require("./databases/mangodb"); // تأكد من استيراد الملف
+const connectDB = require("./databases/mangodb"); // ملف الاتصال الخاص بك
 
-// 2. إعداد Cloudinary
+// إعداد Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -20,9 +20,7 @@ cloudinary.config({
 
 const app = express();
 
-// --- أضف هذا السطر هنا للاتصال ---
-connectDB(); 
-// ---------------------------------
+// ❌ قمنا بحذف connectDB(); من هنا لأنها تسبب مشاكل في الـ Serverless
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
@@ -33,13 +31,21 @@ app.use("/user", userRouter);
 app.use("/Appointment", doctorAppointment);
 app.use("/doctor", doctorRouter);
 
-// الاستماع محلياً
+// الاستماع محلياً (بيئة التطوير)
 if (process.env.NODE_ENV !== 'production') {
-    const PORT = 3000;
-    app.listen(PORT, () => {
-        console.log(`Server is running on http://localhost:${PORT}`);
+    // تشغيل الاتصال محلياً قبل تشغيل السيرفر
+    connectDB().then(() => {
+        const PORT = 3000;
+        app.listen(PORT, () => {
+            console.log(`Server is running on http://localhost:${PORT}`);
+        });
     });
 }
 
 module.exports = app;
-module.exports.handler = serverless(app);
+
+// 🔗 التعديل الجوهري لـ Vercel: انتظر الاتصال بقاعدة البيانات في كل طلب سحابي
+module.exports.handler = serverless(async (req, res) => {
+    await connectDB(); // يضمن أن التطبيق لن يعالج الطلب إلا بعد التأكد من وجود اتصال بـ MongoDB
+    return app(req, res);
+});
