@@ -4,20 +4,25 @@ const router = express.Router();
 const Appointment = require('../model/AppointmentSchema'); 
 const authMiddleware = require('../auth/jwt'); 
 
-
-router.post("/slot",authMiddleware,async(req,res)=>{
-    const user=req.user.id
-    console.log(req.user)
-    const {doctor,slot,date}=req.body
-    let newSlot=new Appointment({
-        user,
-        doctor,
-        slot,
-        date
-    })
-    await newSlot.save()
-    return res.status(201).send('created slot')
-})
+router.post("/slot", authMiddleware, async (req, res) => {
+    try {
+        const user = req.user.id;
+        const { doctor, slot, date } = req.body;
+        
+        let newSlot = new Appointment({
+            user,
+            doctor,
+            slot,
+            date
+        });
+        
+        await newSlot.save();
+        return res.status(201).send({ message: 'created slot', data: newSlot });
+    } catch (error) {
+        console.error("Error creating slot:", error);
+        return res.status(500).send({ message: "حدث خطأ في الخادم", error: error.message });
+    }
+});
 router.get("/slot",authMiddleware,async(req,res)=>{
     const slots = await Appointment.find().populate("user").populate("doctor")
     return res.status(200).send(slots)
