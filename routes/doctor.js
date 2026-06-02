@@ -1,125 +1,71 @@
-// const express = require("express")
-// const auth = require("../auth/jwt")
-// const router = express.Router()
-// const Doctor = require("../model/DoctorSchema")
-// const multer = require('multer')
-// const fs = require('fs') 
+const express = require("express");
+const auth = require("../auth/jwt");
+const router = express.Router();
+const Doctor = require("../model/DoctorSchema");
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const multer = require('multer');
 
-// const uploadDir = 'uploads/';
-// if (!fs.existsSync(uploadDir)){
-//     fs.mkdirSync(uploadDir);
-// }
+// إعداد التخزين ليتم الرفع إلى Cloudinary
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'doctors_images',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'], // أضفنا webp هنا
+    public_id: (req, file) => 'doctor-' + Date.now()
+  },
+});
 
-// // إعدادات التخزين
-// const storage = multer.diskStorage({
-//     destination: function (req, file, cb) {
-//         cb(null, uploadDir) 
-//     },
-//     filename: function (req, file, cb) {
-//         cb(null, Date.now() + '-' + file.originalname)
-//     }
-// });
+const upload = multer({ storage: storage });
 
-// const upload = multer({ storage: storage })
-
-// router.post("/Doctor",auth, upload.single('image'), async (req, res) => {
-//     if(req.user.role!=="admin"){
-//         console.log(req.user.role)
-//          return res.status(403).send({ message: "auth error" ,admin:req.user.role});
-
-
-//     }
-//     const { name, specialty, expier, des } = req.body
-//     try {
-//         console.log(auth.user)
-//         if (!name || !specialty || !expier || !des || !req.file) {
-//             return res.status(400).send({ message: "all info and image are required" });
-//         }
-
-//         const newDoc = new Doctor({
-//             name,
-//             specialty,
-//             des,
-//             expier,
-//             image: req.file.path // سيخزن المسار مثل: uploads/171541...jpg
-//         })
-
-//         await newDoc.save()
-//         return res.status(201).send({ message: "created the doc :)", data: newDoc });
-
-//     } catch (error) {
-//         return res.status(500).send({ message: "error in server", error: error.message });
-//     }
-// })
-
-// router.get("/Doctors", async (req, res) => {
-   
-   
-//     try {
-//         const doctors=await Doctor.find();
-//         return res.status(200).send({ message: "True", doctors: doctors});
-
-      
-//         }
-
-//      catch (error) {
-//         return res.status(500).send({ message: "error in server", error: error.message });
-//     }
-// })
-
-// module.exports = router
-const express = require("express")
-const auth = require("../auth/jwt")
-const router = express.Router()
-const Doctor = require("../model/DoctorSchema")
-const multer = require('multer')
-
-// 1. استخدم memoryStorage بدلاً من diskStorage
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage })
-
-// 2. احذف الأسطر الخاصة بـ fs.existsSync و fs.mkdirSync 
-// لأن Vercel لا تسمح بإنشاء مجلدات برمجياً.
-
-router.post("/Doctor", auth, upload.single('image'), async (req, res) => {
-    if(req.user.role !== "admin"){
-         return res.status(403).send({ message: "auth error" , admin: req.user.role });
+// استخدام دالة المعالجة اليدوية لالتقاط أخطاء الرفع
+router.post("/Doctor", auth, (req, res) => {
+  upload.single('image')(req, res, async (err) => {
+    // 1. معالجة أخطاء الرفع (مثل الصيغ غير المدعومة)
+    if (err) {
+      console.error("خطأ من Multer (Doctor):", err);
+      return res.status(400).json({ message: "خطأ في رفع الصورة", error: err.message });
     }
-    
-    const { name, specialty, expier, des } = req.body
-    
+
+    // 2. التحقق من الصلاحيات
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "auth error", admin: req.user.role });
+    }
+
     try {
-        if (!name || !specialty || !expier || !des || !req.file) {
-            return res.status(400).send({ message: "all info and image are required" });
-        }
+      const { name, specialty, expier, des } = req.body;
 
-        // 3. ملاحظة: عند استخدام memoryStorage، لن يكون هناك req.file.path.
-        // يجب أن ترفع الصورة لخدمة خارجية مثل Cloudinary أولاً.
-        // إذا كنت ستكمل بدون رفع خارجي مؤقتاً، خزن البيانات الأساسية فقط.
-        
-        const newDoc = new Doctor({
-            name,
-            specialty,
-            des,
-            expier,
-            image: "TEMP_URL_OR_BASE64" // هنا يجب وضع رابط الصورة بعد رفعها لـ Cloudinary
-        })
+      // 3. التحقق من البيانات
+      if (!name || !specialty || !expier || !des || !req.file) {
+        return res.status(400).json({ message: "all info and image are required" });
+      }
 
-        await newDoc.save()
-        return res.status(201).send({ message: "created the doc :)", data: newDoc });
+      // 4. الحفظ في قاعدة البيانات
+      const newDoc = new Doctor({
+        name,
+        specialty,
+        des,
+        expier,
+        image: req.file.path
+      });
+
+      await newDoc.save();
+      return res.status(201).json({ message: "created the doc :)", data: newDoc });
 
     } catch (error) {
-        return res.status(500).send({ message: "error in server", error: error.message });
+      console.error("خطأ في الخادم:", error);
+      return res.status(500).json({ message: "error in server", error: error.message });
     }
-})
+  });
+});
 
 router.get("/Doctors", async (req, res) => {
-    try {
-        const doctors = await Doctor.find();
-        return res.status(200).send({ message: "True", doctors: doctors});
-    } catch (error) {
-        return res.status(500).send({ message: "error in server", error: error.message });
-    }
-})
+  try {
+    const doctors = await Doctor.find();
+    return res.status(200).json({ message: "True", doctors: doctors });
+  } catch (error) {
+    return res.status(500).json({ message: "error in server", error: error.message });
+  }
+});
 
-module.exports = router
+module.exports = router;

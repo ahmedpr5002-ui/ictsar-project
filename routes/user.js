@@ -1,111 +1,53 @@
-const express=require("express")
-const router=express.Router()
-const jwt = require("jsonwebtoken")
-const fs = require('fs') 
-const multer = require('multer')
-const bcrypt = require("bcryptjs")
-const user = require("../model/UserSchema")
-const mongoose =require("mongoose")
+const express = require("express");
+const router = express.Router();
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const user = require("../model/UserSchema");
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const multer = require('multer');
 
-const uploadDir = 'uploadsUser/';
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir);
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir)
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'users_profiles',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'gif'],
+    public_id: (req, file) => `user-${Date.now()}`
   },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, file.fieldname + '-' + uniqueSuffix + file.originalname)
-  }
-})
+});
 
-const upload = multer({ storage: storage })
+const upload = multer({ storage: storage });
 
-
-
-router.post("/register",upload.single('image'), async(req,res)=>{
-    try{
-         const {username,email,password,image}= req.body
-    if(!username || !email || !password || !req.file){
-        return res.status(400).send({message:"all info is required"})
-    }
-    let newUser = await user.findOne({$or: [{ email }, { username }]})
-    if(newUser){
-       return res.status(400).send({message:"the email is or username is used"})
-    }
-
-    
-    newUser= new user({
-        username,
-        email,
-        password:await bcrypt.hash(password,10),
-        image:req.file.path
-    })
-    await newUser.save()
-    const token = jwt.sign({id:newUser._id,email,username},process.env.TOKEN_VAL,{expiresIn:"1w"})
-    return res.status(201).send({masege:"the user is created",
-        token:token
-    })
-    
-
-   
-
-
-} catch (error) {
-    console.error("خطأ السيرفر الفعلي:", error); 
-    
-    // التعديل: إرسال نص الخطأ الحقيقي لكي تراه في الـ React فوراً بدل الانهيار المبهم
-    return res.status(500).send({ 
-        message: "حدث خطأ في الخادم أثناء الحفظ", 
-        error: error.message 
-    });
-}
-   
-
-
-})
-router.post("/login", async (req, res) => {
+router.post("/register", (req, res) => {
+  upload.single('image')(req, res, async (err) => {
+    if (err) return res.status(400).json({ message: "خطأ في رفع الصورة", error: err.message });
     try {
-        const { email, password } = req.body
-        if (!email || !password) {
-            return res.status(400).send({ message: "all info is required" })
-        }
-        
-        // جلب المستخدم مع كلمة المرور والاسم والصورة
-        let newUser = await user.findOne({ email }).select("+password");
-        if (!newUser) {
-            return res.status(400).send({ message: "the user is not found" })
-        }
-        
-        const pass = await bcrypt.compare(password, newUser.password)
-        
-        if (pass) {
-            // التعديل هنا: قمنا بإضافة username: newUser.username داخل الـ Token
-            const token = jwt.sign(
-                {
-                    id: newUser._id,
-                    email,
-                    username: newUser.username, // <-- هذا السطر الناقص
-                    role: newUser.role,
-                    image: newUser.image
-                },
-                process.env.TOKEN_VAL,
-                { expiresIn: "1w" }
-            )
+      const { username, email, password } = req.body;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const newUser = new user({ username, email, password: hashedPassword, image: req.file.path, role: "user" });
+      await newUser.save();
+      const token = jwt.sign({ id: newUser._id, email, username, role: "user" }, process.env.TOKEN_VAL, { expiresIn: "1w" });
+      return res.status(201).json({ message: "User created", token });
+    } catch (error) { return res.status(500).json({ error: error.message }); }
+  });
+});
 
-            return res.status(200).send({
-                masege: "login",
-                token: token
-            })
-        } else {
-            return res.status(400).send({ masege: "password is false" })
-        }
-    } catch (error) {
-        console.log("DETAILED ERROR:", error);
-        return res.status(500).send({ message: "error in server", error: error.message });
-    }
-})
-module.exports=router
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const existingUser = await user.findOne({ email }).select("+password");
+    if (!existingUser) return res.status(400).json({ message: "Invalid credentials" });
+    const isMatch = await bcrypt.compare(password, existingUser.password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+    
+    // تأكد من إضافة الـ role هنا
+    const token = jwt.sign(
+      { id: existingUser._id, email: existingUser.email, username: existingUser.username, role: existingUser.role },
+      process.env.TOKEN_VAL,
+      { expiresIn: "1w" }
+    );
+    return res.status(200).json({ message: "Login successful", token });
+  } catch (error) { return res.status(500).json({ error: error.message }); }
+});
+
+module.exports = router;
