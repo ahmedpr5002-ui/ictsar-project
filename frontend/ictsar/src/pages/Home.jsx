@@ -82,7 +82,7 @@ function Home() {
       <Navbar /> 
 
       {user && user.role !== 'admin' && (
-        <div style={{ width: "100%", maxWidth: "450px", padding: "15px", boxSizing: "border-box" }}>
+        <div style={{ width: "100%", maxWidth: "450px", padding: "15px", boxSizing: "border-box",marginBottom:"60px" }}>
           
        
           <main key={resetKey} style={{display:"flex",alignItems:"center",flexDirection:"column"}}>
