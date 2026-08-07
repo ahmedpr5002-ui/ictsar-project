@@ -17,6 +17,7 @@ const connectDB = async () => {
             bufferCommands: false, // تعطيل التخزين المؤقت لتجنب رسالة الخطأ التي واجهتها
         };
 
+        
         // إنشاء وعد للاتصال
         cached.promise = mongoose.connect(process.env.DATA_URL, opts).then((mongoose) => {
             return mongoose;
