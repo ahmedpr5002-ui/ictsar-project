@@ -1,36 +1,78 @@
- const mongoose = require('mongoose');
- const { Schema } = mongoose;
+const mongoose = require('mongoose');
+const { Schema, Types } = mongoose; 
 
+const medicationSchema = new Schema({
+    name: { type: String, required: true },
+    dosage: { type: String }, // الجرعة مثل: 500mg
+    instruction: { type: String } // التعليمات مثل: بعد الأكل مرتين يومياً
+}, { _id: false });
 
-const AppointmentSchema = new Schema({
+const appointmentSchema = new Schema({
+    // المريض الذي قام بالحجز
     user: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: Types.ObjectId, 
         ref: "User",
-        required: true
+        required: [true, "يجب تحديد المريض"]
     },
+
+    // الطبيب المطلوب الحجز عنده
     doctor: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: Types.ObjectId,
         ref: "Doctor",
-        required: true
+        required: [true, "يجب تحديد الطبيب"]
     },
-   
+
+    // المنشأة الطبية (المجمع أو العيادة)
+    medicalEntity: {
+        type: Types.ObjectId,
+        ref: "MedicalEntity",
+        required: [true, "يجب تحديد المنشأة الطبية (المجمع/العيادة)"]
+    },
+
+    // وقت الموعد الفعلي
     slot: {
-        type: String,
-        required: [true, "يجب تحديد وقت الموعد"],
+        type: Date, 
+        required: [true, "يجب تحديد وقت وتاريخ الموعد"]
     },
-    date:{
+
+    // حالة الحجز
+    status: { 
         type: String,
-        required: [true, "يجب تحديد تاريخ الموعد "],
+        enum: {
+            values: ['pending', 'completed', 'cancelled', 'no_show'],
+            message: 'الحالة المدخلة للموعد غير صالحة'
+        }, 
+        default: 'pending'
     },
-    stat:{
+
+    // -----------------------------------------------------------------
+    // تفاصيل التشخيص والوصفة الطبية (تُعبأ عند وصول المريض للكشف)
+    // -----------------------------------------------------------------
+    diagnosis: {
         type: String,
-        enum: ['copcomplete', 'incomplete'],
-        default: 'incomplete'
+        default: ""
     },
-    
+    prescription: {
+        type: String,
+        default: ""
+    },
+    medications: [medicationSchema],
+    prescriptionPreservedAt: {
+        type: Date // تاريخ ووقت إرسال الوصفة
+    }
+
 }, { 
     timestamps: true 
 });
-const Appointment = mongoose.model('Appointment', AppointmentSchema);
 
+// منع الحجز المزدوج لنفس الطبيب والمنشأة في نفس الوقت للمواعيد النشطة فقط
+appointmentSchema.index({ doctor: 1, medicalEntity: 1, slot: 1 }, { 
+    unique: true, 
+    partialFilterExpression: { status: { $nin: ['cancelled', 'no_show'] } } 
+});
+
+appointmentSchema.index({ user: 1 });
+appointmentSchema.index({ medicalEntity: 1 });
+
+const Appointment = mongoose.model('Appointment', appointmentSchema);
 module.exports = Appointment;
