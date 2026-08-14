@@ -28,6 +28,9 @@ const upload = multer({ storage: storage });
 // =====================================================================
 // 🛠️ 2. دالة مساعدة لفك صيغ البيانات وتحويل Location إلى GeoJSON
 // =====================================================================
+// =====================================================================
+// 🛠️ 2. دالة مساعدة لفك صيغ البيانات وتحويل Location إلى GeoJSON
+// =====================================================================
 const parseFormDataFields = (body) => {
   const fieldsToParse = ["specialties", "location", "phones", "workingHours", "doctors"];
   const parsedBody = { ...body };
@@ -48,35 +51,37 @@ const parseFormDataFields = (body) => {
     let lat = null;
     let lng = null;
 
-    // حالة أ: إذا كانت lat و lng ممررة كحقول منفصلة مباشرة في Form-Data (مثل location[lat] أو location.lat)
-    if (parsedBody.location.lat !== undefined || parsedBody.location.lng !== undefined) {
-      lat = parseFloat(parsedBody.location.lat);
-      lng = parseFloat(parsedBody.location.lng);
+    const loc = parsedBody.location;
+
+    // حالة أ: إذا كانت lat و lng داخل location كأرقام مباشرة { lat: ..., lng: ... }
+    if (loc.lat !== undefined && loc.lng !== undefined) {
+      lat = parseFloat(loc.lat);
+      lng = parseFloat(loc.lng);
     } 
-    // حالة ب: إذا كانت coordinates ممررة كـ Object قديم فيه lat و lng
-    else if (parsedBody.location.coordinates) {
-      if (Array.isArray(parsedBody.location.coordinates)) {
-        // إذا كانت مصفوفة بالفعل [lng, lat]
-        [lng, lat] = parsedBody.location.coordinates.map(Number);
-      } else if (typeof parsedBody.location.coordinates === "object") {
-        lat = parseFloat(parsedBody.location.coordinates.lat);
-        lng = parseFloat(parsedBody.location.coordinates.lng);
-      }
+    // حالة ب: إذا تم إرسال coordinates كمصفوفة [lng, lat]
+    else if (Array.isArray(loc.coordinates)) {
+      lng = parseFloat(loc.coordinates[0]);
+      lat = parseFloat(loc.coordinates[1]);
+    }
+    // حالة ج: إذا كانت coordinates ممررة كـ Object { lat: ..., lng: ... }
+    else if (typeof loc.coordinates === "object" && loc.coordinates !== null) {
+      lat = parseFloat(loc.coordinates.lat);
+      lng = parseFloat(loc.coordinates.lng);
     }
 
-    // بناء كائن الـ GeoJSON القياسي لـ MongoDB
+    // التأكد من صحة القيم وعدم كونها NaN
     const validLng = !isNaN(lng) && lng !== null ? lng : 0;
     const validLat = !isNaN(lat) && lat !== null ? lat : 0;
 
-    // في جزء تحويل location داخل parseFormDataFields:
-parsedBody.location = {
-  city: parsedBody.location?.city || parsedBody.city || "غير محدد",
-  address: parsedBody.location?.address || parsedBody.address || "غير محدد",
-  coordinates: {
-    type: "Point",
-    coordinates: [validLng, validLat] // [Longitude, Latitude]
-  }
-};
+    // إعادة بناء كائن location بالهيكل المطلوب للـ Schema الفعلي
+    parsedBody.location = {
+      city: loc.city || parsedBody.city || "غير محدد",
+      address: loc.address || parsedBody.address || "غير محدد",
+      coordinates: {
+        type: "Point",
+        coordinates: [validLng, validLat] // [Longitude, Latitude]
+      }
+    };
   }
 
   return parsedBody;
@@ -317,9 +322,84 @@ router.post("/", authMiddleware, upload.single("logo"), async (req, res) => {
   }
 });
 
+// router.get("/", async (req, res) => {
+//   try {
+//     const { search, city, type } = req.query;
+//     let filter = { isActive: true };
+
+//     if (search) filter.$text = { $search: search };
+//     if (city) filter["location.city"] = city;
+//     if (type) filter.entityType = type;
+
+//     const entities = await MedicalEntity.find(filter)
+//       .populate("owner", "name email image")
+//       .populate("doctors", "name email image");
+
+//     return res.status(200).json(entities);
+//   } catch (error) {
+//     return res.status(500).json({ error: error.message });
+//   }
+// });
 router.get("/", async (req, res) => {
   try {
-    const { search, city, type } = req.query;
+    const { search, city, type, lat, lng, latitude, longitude } = req.query;
+
+    // تحديد الإحداثيات الممررة
+    const userLat = parseFloat(lat || latitude);
+    const userLng = parseFloat(lng || longitude);
+    const hasCoordinates = !isNaN(userLat) && !isNaN(userLng);
+
+    // 1. في حال توفر الإحداثيات نستخدم التجميع (Aggregation) لمعالجة المسافة والفرز
+    if (hasCoordinates) {
+      const pipeline = [
+        {
+          $geoNear: {
+            near: {
+              type: "Point",
+              coordinates: [userLng, userLat] // [Longitude, Latitude]
+            },
+            distanceField: "distance", // إضافة حقل المسافة بالـ meters لكل عنصر
+            spherical: true,
+            query: { isActive: true }
+          }
+        }
+      ];
+
+      // تطبيق بقية الفلاتر داخل pipeline البحث
+      if (search) {
+        pipeline[0].$geoNear.query.$text = { $search: search };
+      }
+      if (city) {
+        pipeline[0].$geoNear.query["location.city"] = city;
+      }
+      if (type) {
+        pipeline[0].$geoNear.query.entityType = type;
+      }
+
+      // إحضار بيانات المالك والأطباء المرتبطين
+      pipeline.push(
+        {
+          $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "owner"
+          }
+        },
+        { $unwind: { path: "$owner", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            "owner.password": 0,
+            "owner.token": 0
+          }
+        }
+      );
+
+      const entities = await MedicalEntity.aggregate(pipeline);
+      return res.status(200).json(entities);
+    }
+
+    // 2. في حال عدم توفر موقع المستخدم نعتمد الاستعلام التقليدي
     let filter = { isActive: true };
 
     if (search) filter.$text = { $search: search };
@@ -328,7 +408,8 @@ router.get("/", async (req, res) => {
 
     const entities = await MedicalEntity.find(filter)
       .populate("owner", "name email image")
-      .populate("doctors", "name email image");
+      .populate("doctors", "name email image")
+      .sort({ createdAt: -1 });
 
     return res.status(200).json(entities);
   } catch (error) {
