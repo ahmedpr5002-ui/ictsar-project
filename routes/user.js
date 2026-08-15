@@ -150,6 +150,9 @@ router.post("/login", async (req, res) => {
 // ==========================================
 // 4. تسجيل الدخول / إنشاء حساب عبر Google
 // ==========================================
+// ==========================================
+// 4. تسجيل الدخول / إنشاء حساب عبر Google
+// ==========================================
 router.post("/google-auth", async (req, res) => {
   try {
     const { idToken } = req.body;
@@ -158,11 +161,13 @@ router.post("/google-auth", async (req, res) => {
       return res.status(400).json({ message: "رمز idToken مطلوب" });
     }
 
-    const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "944016658908-urr28a5945cukhq09phtv9o2s8n2s04p.apps.googleusercontent.com";
+    const WEB_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "944016658908-urr28a5945cukhq09phtv9o2s8n2s04p.apps.googleusercontent.com";
+    const ANDROID_CLIENT_ID = "944016658908-t2qd1dhbr560kqh2mht6eam7hfje19ig.apps.googleusercontent.com";
 
+    // التمرير كـ Array يسمح بالتحقق من الـ Web والـ Android معاً
     const ticket = await googleClient.verifyIdToken({
       idToken,
-      audience: CLIENT_ID,
+      audience: [WEB_CLIENT_ID, ANDROID_CLIENT_ID],
     });
 
     const payload = ticket.getPayload();
@@ -216,7 +221,7 @@ router.post("/google-auth", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("خطأ Google Auth في الباك إند:", error);
+    console.error("خطأ Google Auth في الباك إيند:", error);
     return res.status(400).json({ 
       message: "فشل التحقق من حساب Google", 
       error: error.message 
