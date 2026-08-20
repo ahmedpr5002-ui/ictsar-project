@@ -258,5 +258,15 @@ router.patch("/users/promote-to-doctor/:id", auth, async (req, res) => {
     return res.status(500).json({ message: "خطأ في السيرفر أثناء تحديث دور المستخدم", error: error.message });
   }
 });
-
+router.get("/user-stats/:id", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "المستخدم غير موجود" });
+    }
+    return res.status(200).json({ user });
+  } catch (error) {
+    return res.status(500).json({ message: "خطأ في السيرفر", error: error.message });
+  }
+});
 module.exports = router;
