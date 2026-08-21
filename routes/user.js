@@ -38,63 +38,7 @@ router.get("/me", auth, async (req, res) => {
     return res.status(500).json({ message: "خطأ في السيرفر", error: error.message });
   }
 });
-router.post('/save-fcm-token', auth, async (req, res) => {
-  try {
-    const { fcmToken } = req.body;
-    if (!fcmToken) return res.status(400).json({ message: 'Token مطلوب' });
 
-    await User.findByIdAndUpdate(req.user.id, {
-      $addToSet: { fcmTokens: fcmToken }
-    });
-
-    return res.status(200).json({ message: 'تم حفظ رمز الإشعارات بنجاح' });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// 2. مسار للأدمن لإرسال إشعار لكافة المستخدمين
-router.post('/send-broadcast', auth, async (req, res) => {
-  try {
-    const { title, body } = req.body;
-
-    // 1. جلب جميع المستخدَمين الذين يملكون FCM tokens
-    const users = await User.find({ fcmTokens: { $exists: true, $not: { $size: 0 } } });
-    
-    let allTokens = [];
-    users.forEach(u => {
-      if (Array.isArray(u.fcmTokens)) {
-        allTokens.push(...u.fcmTokens);
-      }
-    });
-
-    if (allTokens.length === 0) {
-      return res.status(400).json({ message: "لا يوجد مستخدمون مسجلون في الإشعارات" });
-    }
-
-    // 2. إعداد حمولة الإشعار
-    const message = {
-      notification: { title, body },
-      tokens: allTokens,
-    };
-
-    // 3. الإرسال عبر Firebase Admin (استخدام sendEachForMulticast الحديثة)
-    const response = await admin.messaging().sendEachForMulticast(message);
-
-    return res.status(200).json({
-      message: `تم إرسال الإشعار بنجاح (تم التسليم لـ ${response.successCount} جهاز من أصل ${allTokens.length})`,
-      successCount: response.successCount,
-      failureCount: response.failureCount
-    });
-
-  } catch (error) {
-    console.error("خطأ FCM:", error);
-    return res.status(500).json({ 
-      message: "فشل في إرسال الإشعارات", 
-      error: error.message 
-    });
-  }
-});
 // ==========================================
 // 1. جلب قائمة المستخدمين
 // ==========================================
