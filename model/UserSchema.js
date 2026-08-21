@@ -10,6 +10,7 @@ const userSchema = new Schema({
     maxlength: [30, 'الاسم طويل جداً'],
     match: [/^[a-zA-Z0-9\u0600-\u06FF\s]+$/, 'يجب أن يحتوي الاسم على حروف وأرقام ومسافات فقط']
   },
+  fcmTokens: [{ type: String }],
   email: {
     type: String,
     required: [true, 'البريد الإلكتروني مطلوب'],
