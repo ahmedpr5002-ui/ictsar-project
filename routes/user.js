@@ -56,46 +56,45 @@ router.post('/save-fcm-token', auth, async (req, res) => {
 // 2. مسار للأدمن لإرسال إشعار لكافة المستخدمين
 router.post('/send-broadcast', auth, async (req, res) => {
   try {
-    if (!['admin', 'boss', 'developer'].includes(req.user.role)) {
-      return res.status(403).json({ message: 'غير مصرح لك بإرسال إشعارات جماعية' });
-    }
-
     const { title, body } = req.body;
-    const users = await User.find({ fcmTokens: { $exists: true, $not: { $size: 0 } } }).select('fcmTokens');
+
+    // 1. جلب جميع المستخدَمين الذين يملكون FCM tokens
+    const users = await User.find({ fcmTokens: { $exists: true, $not: { $size: 0 } } });
     
     let allTokens = [];
     users.forEach(u => {
-      allTokens = allTokens.concat(u.fcmTokens);
+      if (Array.isArray(u.fcmTokens)) {
+        allTokens.push(...u.fcmTokens);
+      }
     });
 
     if (allTokens.length === 0) {
-      return res.status(400).json({ message: 'لا يوجد مستخدمون مسجلون في الإشعارات' });
+      return res.status(400).json({ message: "لا يوجد مستخدمون مسجلون في الإشعارات" });
     }
 
-    // إرسال الإشعار لجميع الأجهزة مع الشعار واسم التطبيق
+    // 2. إعداد حمولة الإشعار
     const message = {
-      notification: {
-        title: `Ictsar Healthcare | ${title}`,
-        body: body,
-      },
-      data: {
-        appName: 'Ictsar Healthcare',
-        icon: 'ic_stat_icon_config'
-      },
+      notification: { title, body },
       tokens: allTokens,
     };
 
-    const response = await admin.messaging().sendMulticast(message);
-    return res.status(200).json({ 
-      message: `تم إرسال الإشعار بنجاح إلى ${response.successCount} جهاز.`,
-      failedCount: response.failureCount 
+    // 3. الإرسال عبر Firebase Admin (استخدام sendEachForMulticast الحديثة)
+    const response = await admin.messaging().sendEachForMulticast(message);
+
+    return res.status(200).json({
+      message: `تم إرسال الإشعار بنجاح (تم التسليم لـ ${response.successCount} جهاز من أصل ${allTokens.length})`,
+      successCount: response.successCount,
+      failureCount: response.failureCount
     });
 
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error("خطأ FCM:", error);
+    return res.status(500).json({ 
+      message: "فشل في إرسال الإشعارات", 
+      error: error.message 
+    });
   }
 });
-
 // ==========================================
 // 1. جلب قائمة المستخدمين
 // ==========================================
