@@ -38,6 +38,63 @@ router.get("/me", auth, async (req, res) => {
     return res.status(500).json({ message: "خطأ في السيرفر", error: error.message });
   }
 });
+router.post('/save-fcm-token', auth, async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+    if (!fcmToken) return res.status(400).json({ message: 'Token مطلوب' });
+
+    await User.findByIdAndUpdate(req.user.id, {
+      $addToSet: { fcmTokens: fcmToken }
+    });
+
+    return res.status(200).json({ message: 'تم حفظ رمز الإشعارات بنجاح' });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. مسار للأدمن لإرسال إشعار لكافة المستخدمين
+router.post('/send-broadcast', auth, async (req, res) => {
+  try {
+    if (!['admin', 'boss', 'developer'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'غير مصرح لك بإرسال إشعارات جماعية' });
+    }
+
+    const { title, body } = req.body;
+    const users = await User.find({ fcmTokens: { $exists: true, $not: { $size: 0 } } }).select('fcmTokens');
+    
+    let allTokens = [];
+    users.forEach(u => {
+      allTokens = allTokens.concat(u.fcmTokens);
+    });
+
+    if (allTokens.length === 0) {
+      return res.status(400).json({ message: 'لا يوجد مستخدمون مسجلون في الإشعارات' });
+    }
+
+    // إرسال الإشعار لجميع الأجهزة مع الشعار واسم التطبيق
+    const message = {
+      notification: {
+        title: `Ictsar Healthcare | ${title}`,
+        body: body,
+      },
+      data: {
+        appName: 'Ictsar Healthcare',
+        icon: 'ic_stat_icon_config'
+      },
+      tokens: allTokens,
+    };
+
+    const response = await admin.messaging().sendMulticast(message);
+    return res.status(200).json({ 
+      message: `تم إرسال الإشعار بنجاح إلى ${response.successCount} جهاز.`,
+      failedCount: response.failureCount 
+    });
+
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 // ==========================================
 // 1. جلب قائمة المستخدمين
