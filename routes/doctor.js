@@ -72,12 +72,109 @@ router.get("/my-entity", auth, async (req, res) => {
 // =====================================================================
 // 📌 جلب إحصائيات الطبيب العامة
 // =====================================================================
+// router.get("/doctor/statistics", auth, async (req, res) => {
+//   try {
+//     const currentUserId = (req.user.id || req.user._id).toString();
+
+//     const doctorProfile = await Doctor.findOne({
+//       $or: [{ _id: mongoose.Types.ObjectId.isValid(currentUserId) ? currentUserId : null }, { doctor: currentUserId }]
+//     });
+
+//     if (!doctorProfile) {
+//       return res.status(404).json({ message: "لم يتم العثور على ملف الطبيب" });
+//     }
+
+//     const { filterType, status, startDate, endDate } = req.query;
+//     const AppointmentModel = mongoose.model("Appointment") || mongoose.model("Slot");
+
+//     const doctorIds = [doctorProfile._id, doctorProfile.doctor, currentUserId].filter(Boolean);
+    
+//     let baseQuery = { doctor: { $in: doctorIds } };
+//     if (status && status !== "all") baseQuery.status = status;
+
+//     const now = new Date();
+//     let dateStart, dateEnd;
+
+//     if (filterType === "today") {
+//       dateStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+//       dateEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+//     } else if (filterType === "week") {
+//       const startOfWeek = new Date(now);
+//       const currentDay = startOfWeek.getDay();
+//       startOfWeek.setDate(startOfWeek.getDate() - currentDay);
+//       startOfWeek.setHours(0, 0, 0, 0);
+//       const endOfWeek = new Date(startOfWeek);
+//       endOfWeek.setDate(endOfWeek.getDate() + 6);
+//       endOfWeek.setHours(23, 59, 59, 999);
+//       dateStart = startOfWeek; dateEnd = endOfWeek;
+//     } else if (filterType === "month") {
+//       dateStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+//       dateEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+//     } else if (filterType === "year") {
+//       dateStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+//       dateEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+//     } else if (filterType === "custom" && startDate && endDate) {
+//       dateStart = new Date(startDate); dateStart.setHours(0, 0, 0, 0);
+//       dateEnd = new Date(endDate); dateEnd.setHours(23, 59, 59, 999);
+//     }
+
+//     if (filterType && filterType !== "all" && dateStart && dateEnd) {
+//       baseQuery.slot = { $gte: dateStart, $lte: dateEnd };
+//     }
+
+//     const appointments = await AppointmentModel.find(baseQuery).sort({ slot: 1 });
+
+//     const totalAppointments = appointments.length;
+//     const completedAppointments = appointments.filter(a => a.status === "completed").length;
+//     const pendingAppointments = appointments.filter(a => a.status === "pending" || !a.status).length;
+//     const cancelledAppointments = appointments.filter(a => a.status === "cancelled").length;
+//     const attendanceRate = totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0;
+
+//     const daysOrder = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+//     const daysMap = {};
+//     daysOrder.forEach(day => daysMap[day] = { name: day, appointments: 0, completed: 0 });
+
+//     appointments.forEach(app => {
+//       if (app.slot) {
+//         const dateObj = new Date(app.slot);
+//         if (!isNaN(dateObj.getTime())) {
+//           const dayName = daysOrder[dateObj.getDay()];
+//           if (daysMap[dayName]) {
+//             daysMap[dayName].appointments += 1;
+//             if (app.status === "completed") daysMap[dayName].completed += 1;
+//           }
+//         }
+//       }
+//     });
+
+//     const chartData = Object.values(daysMap);
+//     const statusDistribution = [
+//       { name: "مكتملة", value: completedAppointments, color: "#10b981" },
+//       { name: "قيد الانتظار", value: pendingAppointments, color: "#f59e0b" },
+//       { name: "ملغاة", value: cancelledAppointments, color: "#ef4444" }
+//     ];
+
+//     return res.status(200).json({
+//       success: true,
+//       stats: { totalAppointments, completedAppointments, pendingAppointments, cancelledAppointments, attendanceRate, chartData, statusDistribution }
+//     });
+
+//   } catch (error) {
+//     return res.status(500).json({ message: "خطأ في السيرفر", error: error.message });
+//   }
+// });
+// =====================================================================
+// 📌 جلب إحصائيات الطبيب العامة (تشمل الحجوزات الفائتة/عدم الحضور)
+// =====================================================================
 router.get("/doctor/statistics", auth, async (req, res) => {
   try {
     const currentUserId = (req.user.id || req.user._id).toString();
 
     const doctorProfile = await Doctor.findOne({
-      $or: [{ _id: mongoose.Types.ObjectId.isValid(currentUserId) ? currentUserId : null }, { doctor: currentUserId }]
+      $or: [
+        { _id: mongoose.Types.ObjectId.isValid(currentUserId) ? currentUserId : null },
+        { doctor: currentUserId }
+      ]
     });
 
     if (!doctorProfile) {
@@ -128,11 +225,14 @@ router.get("/doctor/statistics", auth, async (req, res) => {
     const completedAppointments = appointments.filter(a => a.status === "completed").length;
     const pendingAppointments = appointments.filter(a => a.status === "pending" || !a.status).length;
     const cancelledAppointments = appointments.filter(a => a.status === "cancelled").length;
+    // 📌 احتساب الحجوزات الفائتة (no_show)
+    const missedAppointments = appointments.filter(a => a.status === "no_show").length;
+    
     const attendanceRate = totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0;
 
     const daysOrder = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
     const daysMap = {};
-    daysOrder.forEach(day => daysMap[day] = { name: day, appointments: 0, completed: 0 });
+    daysOrder.forEach(day => daysMap[day] = { name: day, appointments: 0, completed: 0, missed: 0 });
 
     appointments.forEach(app => {
       if (app.slot) {
@@ -142,6 +242,7 @@ router.get("/doctor/statistics", auth, async (req, res) => {
           if (daysMap[dayName]) {
             daysMap[dayName].appointments += 1;
             if (app.status === "completed") daysMap[dayName].completed += 1;
+            if (app.status === "no_show") daysMap[dayName].missed += 1;
           }
         }
       }
@@ -151,19 +252,28 @@ router.get("/doctor/statistics", auth, async (req, res) => {
     const statusDistribution = [
       { name: "مكتملة", value: completedAppointments, color: "#10b981" },
       { name: "قيد الانتظار", value: pendingAppointments, color: "#f59e0b" },
-      { name: "ملغاة", value: cancelledAppointments, color: "#ef4444" }
+      { name: "ملغاة", value: cancelledAppointments, color: "#ef4444" },
+      { name: "فائتة (لم يحضر)", value: missedAppointments, color: "#6b7280" }
     ];
 
     return res.status(200).json({
       success: true,
-      stats: { totalAppointments, completedAppointments, pendingAppointments, cancelledAppointments, attendanceRate, chartData, statusDistribution }
+      stats: { 
+        totalAppointments, 
+        completedAppointments, 
+        pendingAppointments, 
+        cancelledAppointments, 
+        missedAppointments, 
+        attendanceRate, 
+        chartData, 
+        statusDistribution 
+      }
     });
 
   } catch (error) {
     return res.status(500).json({ message: "خطأ في السيرفر", error: error.message });
   }
 });
-
 // =====================================================================
 // 📌 1. إنشاء طبيب جديد (خاص بالأدمن والـ Boss فقط)
 // =====================================================================
