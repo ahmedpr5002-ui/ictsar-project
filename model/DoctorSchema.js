@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose');
 const { Schema, Types } = mongoose;
 
@@ -35,6 +36,14 @@ const doctorSchema = new Schema({
   isAvailable: {
     type: Boolean,
     default: true
+  },
+  // 📌 إضافة وسائل التواصل الاجتماعي الخاصة بالطبيب
+  socialMedia: {
+    facebook: { type: String, trim: true, default: "" },
+    instagram: { type: String, trim: true, default: "" },
+    whatsapp: { type: String, trim: true, default: "" },
+    phone: { type: String, trim: true, default: "" },
+    linkedin: { type: String, trim: true, default: "" }
   },
   // أيام العمل والتفاصيل الخاصة بكل يوم
   workingDays: [{

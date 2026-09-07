@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose');
 const { Schema, Types } = mongoose;
 
@@ -76,6 +77,17 @@ const medicalComplexSchema = new Schema({
   phones: [{
     type: String
   }],
+
+  // 🌐 وسائل التواصل الاجتماعي
+  socialMedia: {
+    facebook: { type: String, trim: true, default: "" },
+    instagram: { type: String, trim: true, default: "" },
+    whatsapp: { type: String, trim: true, default: "" },
+    twitter: { type: String, trim: true, default: "" },
+    linkedin: { type: String, trim: true, default: "" },
+    telegram: { type: String, trim: true, default: "" },
+    website: { type: String, trim: true, default: "" }
+  },
 
   // 📍 هيكل الموقع المطور لدعم GeoJSON والاستعلامات الجغرافية
   location: {

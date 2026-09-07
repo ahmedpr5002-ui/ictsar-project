@@ -1,3 +1,4 @@
+
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
@@ -28,11 +29,8 @@ const upload = multer({ storage: storage });
 // =====================================================================
 // 🛠️ 2. دالة مساعدة لفك صيغ البيانات وتحويل Location إلى GeoJSON
 // =====================================================================
-// =====================================================================
-// 🛠️ 2. دالة مساعدة لفك صيغ البيانات وتحويل Location إلى GeoJSON
-// =====================================================================
 const parseFormDataFields = (body) => {
-  const fieldsToParse = ["specialties", "location", "phones", "workingHours", "doctors"];
+  const fieldsToParse = ["specialties", "location", "phones", "workingHours", "doctors", "socialMedia"];
   const parsedBody = { ...body };
 
   // 1. فك الحقول النصية القادمة من JSON.stringify عبر Form-Data
@@ -113,6 +111,7 @@ router.get("/admin/stats", authMiddleware, async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
 // روت لجلب المستخدمين المتاحين للتعيين كمدراء أو أطباء
 router.get("/admin/users-list", authMiddleware, async (req, res) => {
   try {
@@ -141,6 +140,7 @@ router.get("/admin/users-list", authMiddleware, async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
 router.get("/admin/all", authMiddleware, async (req, res) => {
   try {
     if (!["admin", "boss"].includes(req.user.role)) {
@@ -244,7 +244,7 @@ router.patch('/admin/:id/toggle-status', async (req, res) => {
 router.post("/", authMiddleware, upload.single("logo"), async (req, res) => {
   try {
     const parsedData = parseFormDataFields(req.body);
-    const { name, entityType, description, specialties, location, phones, workingHours, doctors, owner } = parsedData;
+    const { name, entityType, description, specialties, location, phones, workingHours, doctors, owner, socialMedia } = parsedData;
 
     // 1. التحقق من الحقول الإلزامية الأساسية
     if (!name) {
@@ -292,6 +292,7 @@ router.post("/", authMiddleware, upload.single("logo"), async (req, res) => {
       location,
       phones: phones || [],
       workingHours: workingHours || defaultWorkingHours,
+      socialMedia: socialMedia || {},
       logo: logoPath,
       subscriptionStatus: "active", // تفعيل مبدئي عند الإنشاء
       subscriptionEndDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 يوماً مجاناً
@@ -322,24 +323,6 @@ router.post("/", authMiddleware, upload.single("logo"), async (req, res) => {
   }
 });
 
-// router.get("/", async (req, res) => {
-//   try {
-//     const { search, city, type } = req.query;
-//     let filter = { isActive: true };
-
-//     if (search) filter.$text = { $search: search };
-//     if (city) filter["location.city"] = city;
-//     if (type) filter.entityType = type;
-
-//     const entities = await MedicalEntity.find(filter)
-//       .populate("owner", "name email image")
-//       .populate("doctors", "name email image");
-
-//     return res.status(200).json(entities);
-//   } catch (error) {
-//     return res.status(500).json({ error: error.message });
-//   }
-// });
 router.get("/", async (req, res) => {
   try {
     const { search, city, type, lat, lng, latitude, longitude } = req.query;
@@ -449,7 +432,7 @@ router.put("/:id", authMiddleware, upload.single("logo"), async (req, res) => {
     if (!entity) return res.status(404).json({ message: "المنشأة الطبية غير موجودة" });
 
     const userId = req.user.id || req.user._id;
-    if (entity.owner.toString() !== userId.toString()) {
+    if (entity.owner.toString() !== userId.toString() && req.user.role !== "admin") {
       return res.status(403).json({ message: "غير مصرح لك بتعديل بيانات هذه المنشأة" });
     }
 
@@ -463,6 +446,148 @@ router.put("/:id", authMiddleware, upload.single("logo"), async (req, res) => {
     await entity.save();
 
     return res.status(200).json({ message: "تم تحديث بيانات المنشأة بنجاح", entity });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// =====================================================================
+// 📱 روتات إدارة وسائل التواصل الاجتماعي (Social Media Routes)
+// =====================================================================
+
+/**
+ * @route   PUT /:id/social-media
+ * @desc    تحديث أو إضافة روابط وسائل التواصل الاجتماعي للمنشأة
+ * @access  Private (Owner / Admin)
+ */
+router.put("/:id/social-media", authMiddleware, async (req, res) => {
+  try {
+    const entityId = req.params.id;
+    const { facebook, instagram, whatsapp, twitter, linkedin, telegram, website } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(entityId)) {
+      return res.status(400).json({ message: "معرف المنشأة غير صالح" });
+    }
+
+    const entity = await MedicalEntity.findById(entityId);
+    if (!entity) return res.status(404).json({ message: "المنشأة الطبية غير موجودة" });
+
+    const userId = req.user.id || req.user._id;
+    const isOwner = entity.owner.toString() === userId.toString();
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "غير مصرح لك بتعديل وسائل التواصل لهذه المنشأة" });
+    }
+
+    // تحديث قيم وسائل التواصل الممرة فقط أو إبقاء السابقة
+    if (facebook !== undefined) entity.socialMedia.facebook = facebook;
+    if (instagram !== undefined) entity.socialMedia.instagram = instagram;
+    if (whatsapp !== undefined) entity.socialMedia.whatsapp = whatsapp;
+    if (twitter !== undefined) entity.socialMedia.twitter = twitter;
+    if (linkedin !== undefined) entity.socialMedia.linkedin = linkedin;
+    if (telegram !== undefined) entity.socialMedia.telegram = telegram;
+    if (website !== undefined) entity.socialMedia.website = website;
+
+    await entity.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "تم تحديث وسائل التواصل الاجتماعي بنجاح",
+      socialMedia: entity.socialMedia
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route   DELETE /:id/social-media/:platform
+ * @desc    حذف منصة تواصل اجتماعي واحدة محددة (مثل: facebook, instagram, etc.)
+ * @access  Private (Owner / Admin)
+ */
+router.delete("/:id/social-media/:platform", authMiddleware, async (req, res) => {
+  try {
+    const { id, platform } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "معرف المنشأة غير صالح" });
+    }
+
+    const validPlatforms = ['facebook', 'instagram', 'whatsapp', 'twitter', 'linkedin', 'telegram', 'website'];
+    if (!validPlatforms.includes(platform)) {
+      return res.status(400).json({ message: "منصة التواصل غير معروفة أو غير مدعومة" });
+    }
+
+    const entity = await MedicalEntity.findById(id);
+    if (!entity) return res.status(404).json({ message: "المنشأة الطبية غير موجودة" });
+
+    const userId = req.user.id || req.user._id;
+    const isOwner = entity.owner.toString() === userId.toString();
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "غير مصرح لك بالحذف من هذه المنشأة" });
+    }
+
+    // تفرير الحقل المعني
+    entity.socialMedia[platform] = "";
+    await entity.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `تم حذف حساب ${platform} بنجاح`,
+      socialMedia: entity.socialMedia
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @route   DELETE /:id/social-media
+ * @desc    حذف/مسح كافة وسائل التواصل الاجتماعي للمنشأة
+ * @access  Private (Owner / Admin)
+ */
+router.delete("/:id/social-media", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "معرف المنشأة غير صالح" });
+    }
+
+    const entity = await MedicalEntity.findById(id);
+    if (!entity) return res.status(404).json({ message: "المنشأة الطبية غير موجودة" });
+
+    const userId = req.user.id || req.user._id;
+    const isOwner = entity.owner.toString() === userId.toString();
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "غير مصرح لك بتعديل وسائل التواصل لهذه المنشأة" });
+    }
+
+    entity.socialMedia = {
+      facebook: "",
+      instagram: "",
+      whatsapp: "",
+      twitter: "",
+      linkedin: "",
+      telegram: "",
+      website: ""
+    };
+
+    await entity.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "تم حذف جميع وسائل التواصل الاجتماعي بنجاح",
+      socialMedia: entity.socialMedia
+    });
+
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -530,6 +655,7 @@ router.get("/:id/doctors", async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
 /**
  * @route   PATCH /api/medical-entities/:id/toggle-booking
  * @desc    إيقاف أو تفعيل الحجز للمنشأة الطبية بالكامل (للمالك boss أو admin)
@@ -571,6 +697,7 @@ router.patch("/medical-entities/:id/toggle-booking", authMiddleware, async (req,
     return res.status(500).json({ error: error.message });
   }
 });
+
 router.delete("/:id", authMiddleware, async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -579,13 +706,13 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 
     const entity = await MedicalEntity.findById(req.params.id);
     if (!entity) return res.status(404).json({ message: "المنشأة الطبية غير موجودة" });
- const userId = req.user.id || req.user._id;
- const isOwner = entity.owner.toString() === userId.toString();
- const isAdmin = req.user.role === "admin";
+    const userId = req.user.id || req.user._id;
+    const isOwner = entity.owner.toString() === userId.toString();
+    const isAdmin = req.user.role === "admin";
 
-if (!isOwner && !isAdmin) {
-  return res.status(403).json({ message: "غير مصرح لك بتجميد أو حذف هذه المنشأة" });
-}
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "غير مصرح لك بتجميد أو حذف هذه المنشأة" });
+    }
 
     entity.isActive = false;
     await entity.save();
@@ -595,6 +722,7 @@ if (!isOwner && !isAdmin) {
     return res.status(500).json({ error: error.message });
   }
 });
+
 // =====================================================================
 // 📌 إزالة طبيب من المنشأة الطبية بواسطة (المدير / الأدمن)
 // =====================================================================
@@ -633,7 +761,6 @@ router.delete("/:entityId/doctors/:doctorId", authMiddleware, async (req, res) =
     });
 
     // 5. حذف ملف تعريف الطبيب Doctor أو تحديث المنشأة الخاصة به
-    // (doctorId قد يكون ID المستخدم أو ID بروفايل الطبيب)
     await Doctor.findOneAndDelete({
       $or: [
         { _id: doctorId, medicalEntity: entityId },
@@ -654,6 +781,7 @@ router.delete("/:entityId/doctors/:doctorId", authMiddleware, async (req, res) =
     });
   }
 });
+
 /**
  * @route   PATCH /:id/toggle-booking-status
  * @desc    تحديث حالة الحجز (isBookingAllowed) وتعيين سبب الإيقاف (bookingPauseReason)
@@ -728,6 +856,7 @@ router.patch("/:id/toggle-booking-status", authMiddleware, async (req, res) => {
     });
   }
 });
+
 // =====================================================================
 // 💳 روتات إدارة الاشتراكات والتوقيت التنازلي (Admin Only)
 // =====================================================================
@@ -795,6 +924,7 @@ router.patch("/admin/:id/subscription", authMiddleware, async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
 // =====================================================================
 // 📍 5. روت جلب المجمعات الطبية الأقرب لموقع المريض الجغرافي
 // =====================================================================
@@ -806,7 +936,6 @@ router.patch("/admin/:id/subscription", authMiddleware, async (req, res) => {
 router.get("/nearby", async (req, res) => {
   try {
     const { lat, lng, maxDistance = 10000, limit = 20 } = req.query; 
-    // maxDistance بالمتر (مثلاً 10000m = 10 كيلومتر افتراضياً)
 
     if (!lat || !lng) {
       return res.status(400).json({ 
@@ -919,6 +1048,7 @@ router.get("/admin/:id/subscription-countdown", authMiddleware, async (req, res)
     return res.status(500).json({ error: error.message });
   }
 });
+
 router.patch("/admin/:id/toggle-status", authMiddleware, async (req, res) => {
   try {
     if (!["admin", "boss"].includes(req.user.role)) {
@@ -957,4 +1087,5 @@ router.patch("/admin/:id/toggle-status", authMiddleware, async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
 module.exports = router;
