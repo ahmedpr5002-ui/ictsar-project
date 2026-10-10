@@ -31,6 +31,13 @@ const userSchema = new Schema({
   },
   image: String,
   
+  // -- حقل المحافظة الجديد --
+  governorate: {
+    type: String,
+    default: "",
+    trim: true
+  },
+
   // -- الإضافات الجديدة --
   attendedAppointments: {
     type: Number,
