@@ -125,6 +125,8 @@ medicalComplexSchema.index({ "location.coordinates": "2dsphere" });
 // 2. الفهارس النصية وفهارس العلاقات
 medicalComplexSchema.index({ name: 'text', specialties: 'text', description: 'text' });
 medicalComplexSchema.index({ owner: 1 });
+// إضافة هذا السطر مع الفهارس في نهاية ملف MedicalcomplexSchema.js
+medicalComplexSchema.index({ "location.city": 1, isActive: 1 });
 
 // 🌟 Pre-save Hook لبناء رابط Google Maps تلقائياً
 medicalComplexSchema.pre('save', function () {
@@ -147,6 +149,7 @@ medicalComplexSchema.virtual('location.lat').get(function () {
 medicalComplexSchema.virtual('location.lng').get(function () {
   return this.location?.coordinates?.coordinates?.[0] ?? null;
 });
+
 
 const MedicalComplex = mongoose.model('MedicalEntity', medicalComplexSchema);
 module.exports = MedicalComplex;

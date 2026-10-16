@@ -255,33 +255,33 @@ router.get("/search", async (req, res) => {
 
     const doctors = await Doctor.find(doctorFilter)
       .populate("doctor", "username name email image role")
-      .populate("medicalEntity", "name location contactInfo entityType");
+      .populate("medicalEntity", "name location contactInfo entityType isBookingAllowed");
 
     return res.status(200).json({ message: "True", count: doctors.length, doctors });
   } catch (error) {
     return res.status(500).json({ message: "خطأ في السيرفر", error: error.message });
   }
 });
+
 router.get("/global-search", async (req, res) => {
   try {
     const { search, city, specialty } = req.query;
     
     let doctorFilter = {};
+    // 🌟 1. إعطاء قيمة افتراضية صارمة تشترط أن تكون المنشأة مفعلة حصراً
     let entityFilter = { isActive: true };
 
-    // 1. الفلترة المباشرة بحسب المحافظة (المدينة) والتخصص
+    // 2. الفلترة بحسب المحافظة (المدينة) إن وجدت
     if (city && city.trim() !== "") {
       entityFilter["location.city"] = new RegExp(`^${city.trim()}$`, "i");
     }
 
-    if (specialty && specialty.trim() !== "") {
-      doctorFilter.specialty = new RegExp(specialty.trim(), "i");
-    }
-
-    // 2. معالجة البحث النصي العام (Query Search)
-    if (search && search.trim() !== "") {
-      const flexibleRegex = buildFlexibleRegex(search);
-      const rawRegex = new RegExp(search.trim(), "i");
+    // 3. دمج مصطلح البحث والتخصص لمعالجة شاملة لأسماء الأطباء والمنشآت والتخصصات
+    const searchTerm = search || specialty;
+    if (searchTerm && searchTerm.trim() !== "") {
+      const cleanTerm = searchTerm.trim();
+      const flexibleRegex = buildFlexibleRegex(cleanTerm);
+      const rawRegex = new RegExp(cleanTerm, "i");
 
       const matchingUsers = await User.find({
         $or: [
@@ -294,17 +294,13 @@ router.get("/global-search", async (req, res) => {
       
       const userIds = matchingUsers.map((u) => u._id);
 
-      const searchConditions = [
+      doctorFilter.$or = [
         { doctor: { $in: userIds } },
-        { specialty: flexibleRegex }
+        { specialty: flexibleRegex },
+        { specialty: rawRegex }
       ];
 
-      if (doctorFilter.specialty) {
-        doctorFilter = { $and: [{ specialty: doctorFilter.specialty }, { $or: searchConditions }] };
-      } else {
-        doctorFilter = { $or: searchConditions };
-      }
-
+      // بناء شروط البحث للمنشآت مع الحفاظ على شرط isActive: true
       const entitySearchConditions = [
         { name: flexibleRegex },
         { name: rawRegex },
@@ -315,25 +311,42 @@ router.get("/global-search", async (req, res) => {
       ];
 
       if (entityFilter["location.city"]) {
-        entityFilter = { $and: [{ "location.city": entityFilter["location.city"] }, { $or: entitySearchConditions }] };
+        entityFilter = { 
+          $and: [
+            { isActive: true },
+            { "location.city": entityFilter["location.city"] }, 
+            { $or: entitySearchConditions }
+          ] 
+        };
       } else {
         entityFilter.$or = entitySearchConditions;
       }
+    } else {
+      if (specialty && specialty.trim() !== "") {
+        doctorFilter.specialty = new RegExp(specialty.trim(), "i");
+      }
     }
 
-    // جلب البيانات الأولية
+    // 🌟 4. جلب المنشآت المفعلة حصراً والأطباء
     let [doctors, entities] = await Promise.all([
       Doctor.find(doctorFilter)
         .populate("doctor", "username name email image role")
-        .populate("medicalEntity", "name location contactInfo entityType"),
+        .populate({
+          path: "medicalEntity",
+          match: { isActive: true }, // 👈 استبعاد أي طبيب تتبع منشأته حالة غير مفعلة أثناء الـ Populating
+          select: "name location contactInfo entityType isActive logo"
+        }),
       MedicalEntity.find(entityFilter)
         .populate("owner", "name email image")
-        .select("name entityType logo description specialties location phones isBookingAllowed")
+        .select("name entityType logo description specialties location phones isBookingAllowed isActive")
     ]);
 
-    // 3. جلب أطباء المنشآت الطبية المطابقة وإضافتهم لنتائج الأطباء
+    // 5. تصفية قائمة الأطباء لإزالة من لم يتم العثور على منشأتهم (بسبب عدم تفعيلها)
+    doctors = doctors.filter(doc => doc.medicalEntity != null);
+
+    // 6. جلب أطباء المنشآت الطبية المطابقة المفعلة وإضافتهم لنتائج الأطباء
     if (entities.length > 0) {
-      const matchedEntityIds = entities.map(e => e._id);
+      const matchedEntityIds = entities.filter(e => e.isActive).map(e => e._id);
       
       let entityDoctorsQuery = { medicalEntity: { $in: matchedEntityIds } };
       if (specialty && specialty.trim() !== "") {
@@ -342,23 +355,31 @@ router.get("/global-search", async (req, res) => {
 
       const additionalDoctors = await Doctor.find(entityDoctorsQuery)
         .populate("doctor", "username name email image role")
-        .populate("medicalEntity", "name location contactInfo entityType");
+        .populate({
+          path: "medicalEntity",
+          match: { isActive: true },
+          select: "name location contactInfo entityType isActive logo"
+        });
 
-      // دمج الأطباء وتفادي التكرار باستخدام _id
       const doctorMap = new Map();
       doctors.forEach(d => doctorMap.set(d._id.toString(), d));
-      additionalDoctors.forEach(d => doctorMap.set(d._id.toString(), d));
+      additionalDoctors.forEach(d => {
+        if (d.medicalEntity != null) {
+          doctorMap.set(d._id.toString(), d);
+        }
+      });
 
       doctors = Array.from(doctorMap.values());
     }
 
-    // 4. فلترة إضافية للأطباء بحسب المدينة في حال اختيار محافظة مسبقاً
+    // 7. فلترة نهائية للأطباء بحسب المدينة عند اختيار محافظة
     if (city && city.trim() !== "") {
+      const targetCity = city.trim().toLowerCase();
       doctors = doctors.filter(doc => 
         doc.medicalEntity && 
         doc.medicalEntity.location && 
         doc.medicalEntity.location.city &&
-        doc.medicalEntity.location.city.toLowerCase() === city.trim().toLowerCase()
+        doc.medicalEntity.location.city.toLowerCase() === targetCity
       );
     }
 
@@ -373,65 +394,6 @@ router.get("/global-search", async (req, res) => {
     return res.status(500).json({ success: false, message: "خطأ في السيرفر", error: error.message });
   }
 });
-// router.get("/global-search", async (req, res) => {
-//   try {
-//     const { search } = req.query;
-    
-//     let doctorFilter = {};
-//     let entityFilter = { isActive: true };
-
-//     if (search && search.trim() !== "") {
-//       const flexibleRegex = buildFlexibleRegex(search);
-//       const rawRegex = new RegExp(search.trim(), "i");
-
-//       const matchingUsers = await User.find({
-//         $or: [
-//           { username: flexibleRegex }, 
-//           { name: flexibleRegex },
-//           { username: rawRegex },
-//           { name: rawRegex }
-//         ]
-//       }).select("_id");
-      
-//       const userIds = matchingUsers.map((u) => u._id);
-
-//       doctorFilter = {
-//         $or: [
-//           { doctor: { $in: userIds } },
-//           { specialty: flexibleRegex }
-//         ]
-//       };
-
-//       entityFilter.$or = [
-//         { name: flexibleRegex },
-//         { name: rawRegex },
-//         { specialties: flexibleRegex },
-//         { entityType: rawRegex },
-//         { "location.city": flexibleRegex },
-//         { "location.address": flexibleRegex }
-//       ];
-//     }
-
-//     const [doctors, entities] = await Promise.all([
-//       Doctor.find(doctorFilter)
-//         .populate("doctor", "username name email image role")
-//         .populate("medicalEntity", "name location contactInfo entityType"),
-//       MedicalEntity.find(entityFilter)
-//         .populate("owner", "name email image")
-//         .select("name entityType logo description specialties location phones isBookingAllowed")
-//     ]);
-
-//     return res.status(200).json({
-//       success: true,
-//       totalCount: doctors.length + entities.length,
-//       doctors,
-//       entities
-//     });
-//   } catch (error) {
-//     console.error("خطأ في البحث الموحد:", error);
-//     return res.status(500).json({ success: false, message: "خطأ في السيرفر", error: error.message });
-//   }
-// });
 
 // =====================================================================
 // 📌 3. جلب جميع الأطباء
@@ -440,7 +402,7 @@ router.get("/Doctors", async (req, res) => {
   try {
     const doctors = await Doctor.find()
       .populate("doctor", "username name email image role")
-      .populate("medicalEntity", "name location contactInfo entityType");
+      .populate("medicalEntity", "name location contactInfo entityType isBookingAllowed logo");
     return res.status(200).json({ message: "True", doctors });
   } catch (error) {
     return res.status(500).json({ message: "خطأ في السيرفر", error: error.message });
@@ -459,7 +421,7 @@ router.get("/Doctors/:id", async (req, res) => {
 
     let doctor = await Doctor.findOne({ $or: [{ _id: doctorId }, { doctor: doctorId }] })
       .populate("doctor", "username name email image role")
-      .populate("medicalEntity", "name location contactInfo entityType");
+      .populate("medicalEntity", "name location contactInfo entityType isBookingAllowed");
 
     if (!doctor) return res.status(404).json({ message: "False", error: "لم يتم العثور على الطبيب" });
     return res.status(200).json({ message: "True", doctor });

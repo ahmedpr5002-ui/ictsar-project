@@ -1,0 +1,7 @@
+{
+  "ignore": [
+    "auth_info_baileys/*",
+    "qrcode.png",
+    "node_modules/*"
+  ]
+}

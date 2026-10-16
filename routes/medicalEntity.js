@@ -84,6 +84,67 @@ const parseFormDataFields = (body) => {
 
   return parsedBody;
 };
+// =====================================================================
+// 🌐 جلب المنشآت الطبية المفلترة حسب المحافظة مع Pagination وسرعة عالية
+// =====================================================================
+router.get("/", async (req, res) => {
+  try {
+    const { search, city, governorate, type, page = 1, limit = 15 } = req.query;
+
+    // تحويل القيم إلى أرقام صحيحة للتصفح الصفحي
+    const pageNum = parseInt(page, 10) > 0 ? parseInt(page, 10) : 1;
+    const limitNum = parseInt(limit, 10) > 0 ? parseInt(limit, 10) : 15;
+    const skip = (pageNum - 1) * limitNum;
+
+    // بناء فلتر الاستعلام
+    let filter = { isActive: true };
+
+    // 1. فلترة المحافظة/المدينة تلقائياً عبر قاعدة البيانات
+    const targetCity = city || governorate;
+    if (targetCity && targetCity.trim() !== "") {
+      // استخدام Regex متسامح مع المسافات وحالة الأحرف
+      filter["location.city"] = { $regex: new RegExp(targetCity.trim(), "i") };
+    }
+
+    // 2. فلترة النوع (إذا تم تحديده)
+    if (type && type !== "all") {
+      filter.entityType = type;
+    }
+
+    // 3. البحث النصي السريع (إذا كُتب نص بحث)
+    if (search && search.trim() !== "") {
+      filter.$text = { $search: search.trim() };
+    }
+
+    // تنفيذ الاستعلام بالتوازي للحصول على البيانات والإجمالي لتقليل وقت الاستجابة
+    const [entities, totalEntities] = await Promise.all([
+      MedicalEntity.find(filter)
+        .select("name entityType logo description location phones isBookingAllowed createdAt") // اختيار الحقول الضرورية فقط للقائمة
+        .populate("owner", "name email image")
+        .populate("doctors", "name email image")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(), // تحسين السرعة وتقليل استهلاك الذاكرة بحذف ميزات Mongoose الخفية غير المطلوبة
+      
+      MedicalEntity.countDocuments(filter)
+    ]);
+
+    const totalPages = Math.ceil(totalEntities / limitNum);
+
+    return res.status(200).json({
+      success: true,
+      count: entities.length,
+      totalEntities,
+      totalPages,
+      currentPage: pageNum,
+      data: entities,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching entities:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // =====================================================================
 // 👑 3. روتات لوحة الإدارة (Admin Routes)

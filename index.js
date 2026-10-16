@@ -7,6 +7,7 @@ const cors = require('cors');
 const path = require('path');
 const cron = require('node-cron');
 const moment = require('moment-timezone');
+const { connectToWhatsApp } = require('./routes/whatsappService');
 
 const userRouter = require("./routes/user");
 const ads = require("./routes/adsController");
@@ -15,6 +16,7 @@ const medicalRouter = require("./routes/medicalEntity");
 const doctorRouter = require("./routes/doctor");
 const doctorAppointment = require("./routes/Appointment");
 const state = require("./routes/status");
+const otp = require("./routes/server");
 const connectDB = require("./databases/mangodb"); 
 
 // استدعاء النماذج لاستخدامها في تحديث الحجوزات تلقائياً
@@ -100,6 +102,8 @@ app.use("/doctor", doctorRouter);
 app.use("/statues", state);
 app.use("/medical", medicalRouter);
 app.use("/report", report);
+app.use("/otp", otp );
+
 
 // -------------------------------------------------------------
 // تشغيل السيرفر المحلي والـ Cron (في البيئة المحلية فقط)
@@ -107,6 +111,7 @@ app.use("/report", report);
 if (process.env.NODE_ENV !== 'production') {
     const PORT = process.env.PORT || 4000;
     app.listen(PORT, () => {
+        connectToWhatsApp();
         console.log(`Server is running on http://localhost:${PORT}`);
     });
 
