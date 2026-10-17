@@ -779,6 +779,22 @@ router.post('/send-whatsapp-notification', async (req, res) => {
 // ==========================================
 // ثانياً: مسارات الـ SMS (SMSGate Routes)
 // ==========================================
+// نقطة نهاية لإرجاع وقت السيرفر الحقيقي
+app.get('/server-time', (req, res) => {
+    try {
+        const currentTime = new Date();
+        res.status(200).json({
+            success: true,
+            serverTime: currentTime.toISOString(), // صيغة ISO آمنة وموحدة للمقارنة
+            timestamp: currentTime.getTime()      // طابع زمنية بالأرقام (Milliseconds) لسهولة الحساب
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'فشل في جلب وقت السيرفر'
+        });
+    }
+});
 
 router.post('/send-sms-otp', async (req, res) => {
   const { phone } = req.body;
