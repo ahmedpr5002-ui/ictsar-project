@@ -780,7 +780,7 @@ router.post('/send-whatsapp-notification', async (req, res) => {
 // ثانياً: مسارات الـ SMS (SMSGate Routes)
 // ==========================================
 // نقطة نهاية لإرجاع وقت السيرفر الحقيقي
-app.get('/server-time', (req, res) => {
+router.get('/server-time', (req, res) => {
     try {
         const currentTime = new Date();
         res.status(200).json({
