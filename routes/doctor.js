@@ -48,16 +48,7 @@ function buildFlexibleRegex(term) {
 
   return new RegExp(regexPattern, "i");
 }
-// نقطة نهاية لإرجاع وقت الخادم الحالي بدقة
-router.get('/server-time', (req, res) => {
-  try {
-    res.status(200).json({
-      currentTime: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'تعذر جلب وقت الخادم' });
-  }
-});
+
 // =====================================================================
 // 📌 0. جلب المنشأة الطبية التي يديرها المستخدم الحالي (الـ Boss)
 // =====================================================================
